@@ -1,3 +1,7 @@
 .ipynb_checkpoints
 .requests_cache
 .vscode
+__pycache__
+url_list*
+TODO
+*.pickle
