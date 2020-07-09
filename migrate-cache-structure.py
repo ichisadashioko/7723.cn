@@ -1,7 +1,9 @@
+#!/usr/bin/env python3
+# encoding=utf-8
 import os
 from tqdm import tqdm
 
-import * from shared
+from shared import *
 
 cache_files = os.listdir(cache_dir)
 
