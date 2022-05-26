@@ -4,9 +4,21 @@ function render_game_html_node(gameObj) {
 
     var el = document.createElement('div');
     el.textContent = gameObj.name;
+    el.className = 'game-node-name';
     htmlGameNode.appendChild(el);
 
-    // TODO
+    el = document.createElement('div');
+    el.className = 'game-node-image-container';
+    htmlGameNode.appendChild(el);
+    if (gameObj.banner_image != null) {
+        var img = document.createElement('img');
+        var actualImageUrl = `/api/images/${gameObj.banner_image.url_hash}`;
+        img.src = actualImageUrl;
+        img.className = 'game-node-image';
+        el.appendChild(img);
+    }
+
+    return htmlGameNode;
 }
 
 function render_game_html_node_list(gameObjList) {
@@ -14,8 +26,10 @@ function render_game_html_node_list(gameObjList) {
     for (var i = 0; i < gameObjList.length; i++) {
         var gameObj = gameObjList[i];
         var htmlGameNode = render_game_html_node(gameObj);
-        // TODO
+        htmlGameNodeList.push(htmlGameNode);
     }
+
+    return htmlGameNodeList;
 }
 
 var mainContainer = document.getElementById('main');
@@ -31,7 +45,12 @@ if (mainContainer == null) {
         window.GAME_ENTRIES_INFO_LIST = data;
         console.log('data loaded');
 
-        // TODO
+        setTimeout(function () {
+            var gameNodeList = render_game_html_node_list(data);
+            for (var i = 0; i < gameNodeList.length; i++) {
+                mainContainer.appendChild(gameNodeList[i]);
+            }
+        });
     });
 
     xhr.addEventListener('error', function () {
