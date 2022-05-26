@@ -381,6 +381,13 @@ def handle_game_list_request(
 
 ########################################################################
 
+### HANDLE IMAGE REQUEST ###############################################
+def handle_image_request(
+    request_handler: tornado.web.RequestHandler,
+):
+    # TODO
+    pass
+########################################################################
 
 class AllRequestHandler(tornado.web.RequestHandler):
     async def get(self):
