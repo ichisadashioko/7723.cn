@@ -28,7 +28,10 @@ import tqdm
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 WEBDATA_DIRECTORY = os.path.join(ROOT, 'webdata')
-GAME_ENTRIES_INFO_LIST = []
+
+GAME_OBJ_LIST = []
+GAME_BINARY_URL_LIST = []
+IMAGE_URL_LIST = []
 
 
 def make_obj_json_friendly(obj):
@@ -357,37 +360,15 @@ def handle_game_list_request(
     response_obj = []
 
     # TODO implement pagination
-    total_number_of_games = len(GAME_ENTRIES_INFO_LIST)
-    number_of_returned_games = min(20, total_number_of_games)
+    total_number_of_games = len(GAME_OBJ_LIST)
+    number_of_returned_games = min(16, total_number_of_games)
     for index in tqdm.tqdm(range(number_of_returned_games)):
-        game_info = GAME_ENTRIES_INFO_LIST[index]
-        if type(game_info) is not dict:
-            print(f'warning game_info is not dict - type {type(game_info)} - index {index}')
-        else:
-            reduced_game_info = {
-                'index': index,
-            }
+        game_info = GAME_OBJ_LIST[index]
+        response_obj.append(game_info)
 
-            if 'url' not in game_info:
-                print(f'warning url not in game_info - index {index}')
-            else:
-                reduced_game_info['url'] = game_info['url']
-
-            if 'title' not in game_info:
-                print(f'warning title not in game_info - index {index}')
-            else:
-                reduced_game_info['title'] = game_info['title']
-
-            if 'banner_url' not in game_info:
-                print(f'warning banner_url not in game_info - index {index}')
-            else:
-                reduced_game_info['banner_url'] = game_info['banner_url']
-
-            response_obj.append(reduced_game_info)
-
-    print(response_obj)
+    # print(response_obj)
     response_obj = make_obj_json_friendly(response_obj)
-    print(response_obj)
+    # print(response_obj)
     json_str = json.dumps(response_obj)
     # json_bs = json_str.encode('utf-8')
 
@@ -476,25 +457,141 @@ class AllRequestHandler(tornado.web.RequestHandler):
 
 
 def main():
-    global GAME_ENTRIES_INFO_LIST
+    global GAME_OBJ_LIST, GAME_BINARY_URL_LIST, IMAGE_URL_LIST
 
     parser = argparse.ArgumentParser()
     parser.add_argument('port', nargs='?', type=int, default=8888)
+    parser.add_argument('jsonconfigfile', nargs='?', type=str, default='webconfig.json')
 
     args = parser.parse_args()
     print('args', args)
 
+########################################################################
+    json_config_file = args.jsonconfigfile
+    if not os.path.exists(json_config_file):
+        print(f'error json config file not found - {json_config_file}')
+        return
+
+    # sample json content
+
+    # {
+    #     "game_obj_list_filepath": "tmp_pickle_files/game_obj_list-1650280733912302100.pickle",
+    #     "game_binary_url_list_filepath": "tmp_pickle_files/game_binary_url_list-1650280741999342000.pickle",
+    #     "image_url_list_filepath": "tmp_pickle_files/image_url_list-1650280741968099500.pickle"
+    # }
+
+    content_bs = open(json_config_file, 'rb').read()
+    content_str = content_bs.decode('utf-8')
+
+    try:
+        config_obj = json.loads(content_str)
+    except Exception as ex:
+        stack_trace_str = traceback.format_exc()
+        print(f'error parsing json config file - {json_config_file}')
+        print(ex)
+        print(stack_trace_str)
+        return
+
+    # validate config obj
+    if 'game_obj_list_filepath' not in config_obj:
+        print(f'error game_obj_list_filepath not in config_obj - {json_config_file}')
+        return
+
+    game_obj_list_filepath = config_obj['game_obj_list_filepath']
+    if not os.path.exists(game_obj_list_filepath):
+        print(f'error game_obj_list_filepath not found - {game_obj_list_filepath}')
+        return
+
+    # load pickle content
+    try:
+        with open(game_obj_list_filepath, 'rb') as infile:
+            game_obj_list = pickle.load(infile)
+    except Exception as ex:
+        stack_trace_str = traceback.format_exc()
+        print(f'error loading pickle file - {game_obj_list_filepath}')
+        print(ex)
+        print(stack_trace_str)
+        return
+
+    if not isinstance(game_obj_list, list):
+        print(f'error game_obj_list is not a list - {game_obj_list_filepath}')
+        return
+
+    for index in range(len(game_obj_list)):
+        game_obj = game_obj_list[index]
+        if not isinstance(game_obj, dict):
+            print(f'error game_obj is not a dict - {index}')
+            return
+    # TODO validate each entry in game_obj_list
+    GAME_OBJ_LIST = game_obj_list
+
+########################################################################
+    if 'game_binary_url_list_filepath' not in config_obj:
+        print(f'error game_binary_url_list_filepath not in config_obj - {json_config_file}')
+        return
+
+    game_binary_url_list_filepath = config_obj['game_binary_url_list_filepath']
+    if not os.path.exists(game_binary_url_list_filepath):
+        print(f'error game_binary_url_list_filepath not found - {game_binary_url_list_filepath}')
+        return
+
+    # load pickle content
+    try:
+        with open(game_binary_url_list_filepath, 'rb') as infile:
+            game_binary_url_list = pickle.load(infile)
+    except Exception as ex:
+        stack_trace_str = traceback.format_exc()
+        print(f'error loading pickle file - {game_binary_url_list_filepath}')
+        print(ex)
+        print(stack_trace_str)
+        return
+
+    if not isinstance(game_binary_url_list, list):
+        print(f'error game_binary_url_list is not a list - {game_binary_url_list_filepath}')
+        return
+
+    for index in range(len(game_binary_url_list)):
+        game_binary_url = game_binary_url_list[index]
+        if not isinstance(game_binary_url, str):
+            print(f'error game_binary_url is not a str - {game_binary_url}')
+            return
+
+    GAME_BINARY_URL_LIST = game_binary_url_list
+########################################################################
+    if 'image_url_list_filepath' not in config_obj:
+        print(f'error image_url_list_filepath not in config_obj - {json_config_file}')
+        return
+
+    image_url_list_filepath = config_obj['image_url_list_filepath']
+    if not os.path.exists(image_url_list_filepath):
+        print(f'error image_url_list_filepath not found - {image_url_list_filepath}')
+        return
+
+    # load pickle content
+    try:
+        with open(image_url_list_filepath, 'rb') as infile:
+            image_url_list = pickle.load(infile)
+    except Exception as ex:
+        stack_trace_str = traceback.format_exc()
+        print(f'error loading pickle file - {image_url_list_filepath}')
+        print(ex)
+        print(stack_trace_str)
+        return
+
+    if not isinstance(image_url_list, list):
+        print(f'error image_url_list is not a list - {image_url_list_filepath}')
+        return
+
+    for index in range(len(image_url_list)):
+        image_url = image_url_list[index]
+        if not isinstance(image_url, str):
+            print(f'error image_url is not a string - {index}')
+            return
+
+    IMAGE_URL_LIST = image_url_list
+########################################################################
     port = args.port
     print(f'http://localhost:{port}')
-
-    game_entries_info_log_filepath = 'game_entries.pickle'
-    if os.path.exists(game_entries_info_log_filepath):
-        with open(game_entries_info_log_filepath, 'rb') as infile:
-            GAME_ENTRIES_INFO_LIST = pickle.load(infile)
-        print('type(GAME_ENTRIES_INFO_LIST)', type(GAME_ENTRIES_INFO_LIST))
-        print('len(GAME_ENTRIES_INFO_LIST)', len(GAME_ENTRIES_INFO_LIST))
-    else:
-        print(f'warning: {game_entries_info_log_filepath} not found')
 
     app = tornado.web.Application([
         (r'', AllRequestHandler),
