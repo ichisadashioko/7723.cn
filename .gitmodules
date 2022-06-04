@@ -1,3 +1,6 @@
 [submodule "scripts"]
 	path = scripts
 	url = https://github.com/ichisadashioko/scripts
+[submodule "cacherequests"]
+	path = cacherequests
+	url = https://github.com/ichisadashioko/cacherequests
