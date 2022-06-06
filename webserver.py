@@ -36,7 +36,7 @@ WEBDATA_DIRECTORY = os.path.join(ROOT, 'webdata')
 
 GAME_OBJ_LIST = []
 GAME_BINARY_URL_LIST = []
-IMAGE_URL_LIST = []
+IMAGE_URL_INFO_DICT = []
 
 
 def make_obj_json_friendly(obj):
@@ -396,7 +396,7 @@ def handle_game_list_request(
             print(FG_RED, 'EXCEPTION:', ex)
             print(stack_trace, RESET_COLOR)
 
-            request_handler.set_status(404)
+            request_handler.set_status(400)
             request_handler.set_header('Content-Type', 'application/json')
             response_obj = {
                 'message': 'invalid index',
@@ -461,12 +461,12 @@ def handle_image_request(
     request_handler: tornado.web.RequestHandler,
 ):
     image_url = urllib.parse.unquote(quoted_image_url)
-    if image_url not in IMAGE_URL_LIST:
+    if image_url not in IMAGE_URL_INFO_DICT.keys():
         # not found
         request_handler.set_status(404)
         request_handler.set_header('Content-Type', 'application/json')
         response_obj = {
-            'message': 'this image url is not cached before',
+            'message': 'this image url is not in cache',
             'path': image_url,
         }
 
@@ -475,22 +475,21 @@ def handle_image_request(
 
         return
 
-    # find image in cache
-    response_dict = cacherequests.get_response_from_cache(image_url)
-    if response_dict is None:
+    body_content_cache_key = IMAGE_URL_INFO_DICT[image_url]
+
+    image_content_bs = cacherequests.get_body_content(body_content_cache_key)
+    if image_content_bs is None:
         request_handler.set_status(404)
         request_handler.set_header('Content-Type', 'application/json')
         response_obj = {
-            'message': 'image not found in cache',
+            'message': 'image content is no longer in cache',
             'path': image_url,
         }
 
         response_str = json.dumps(response_obj)
         request_handler.write(response_str)
-
         return
 
-    image_content_bs = response_dict['content_bs']
     # detect image type
     ext = os.path.splitext(image_url)[1]
     ext = ext.lower()
@@ -589,7 +588,7 @@ class AllRequestHandler(tornado.web.RequestHandler):
 
 
 def main():
-    global GAME_OBJ_LIST, GAME_BINARY_URL_LIST, IMAGE_URL_LIST
+    global GAME_OBJ_LIST, GAME_BINARY_URL_LIST, IMAGE_URL_INFO_DICT
 
     parser = argparse.ArgumentParser()
     parser.add_argument('port', nargs='?', type=int, default=8888)
@@ -607,9 +606,9 @@ def main():
     # sample json content
 
     # {
-    #     "game_obj_list_filepath": "tmp_pickle_files/game_obj_list-1650280733912302100.pickle",
+    #     "game_obj_list_filepath": "modified_game_obj_list-1653552476412252800.pickle",
     #     "game_binary_url_list_filepath": "tmp_pickle_files/game_binary_url_list-1650280741999342000.pickle",
-    #     "image_url_list_filepath": "tmp_pickle_files/image_url_list-1650280741968099500.pickle"
+    #     "image_url_info_dict_filepath": "image_url_info_dict-1654534265407578600.pickle"
     # }
 
     content_bs = open(json_config_file, 'rb').read()
@@ -690,37 +689,40 @@ def main():
 
     GAME_BINARY_URL_LIST = game_binary_url_list
 ########################################################################
-    if 'image_url_list_filepath' not in config_obj:
-        print(f'error image_url_list_filepath not in config_obj - {json_config_file}')
+    if 'image_url_info_dict_filepath' not in config_obj:
+        print(f'error image_url_info_dict_filepath not in config_obj - {json_config_file}')
         return
 
-    image_url_list_filepath = config_obj['image_url_list_filepath']
-    if not os.path.exists(image_url_list_filepath):
-        print(f'error image_url_list_filepath not found - {image_url_list_filepath}')
+    image_url_info_dict_filepath = config_obj['image_url_info_dict_filepath']
+    if not os.path.exists(image_url_info_dict_filepath):
+        print(f'error image_url_info_dict_filepath not found - {image_url_info_dict_filepath}')
         return
 
     # load pickle content
     try:
-        with open(image_url_list_filepath, 'rb') as infile:
-            image_url_list = pickle.load(infile)
+        with open(image_url_info_dict_filepath, 'rb') as infile:
+            image_url_info_dict = pickle.load(infile)
     except Exception as ex:
         stack_trace_str = traceback.format_exc()
-        print(f'error loading pickle file - {image_url_list_filepath}')
+        print(f'error loading pickle file - {image_url_info_dict_filepath}')
         print(ex)
         print(stack_trace_str)
         return
 
-    if not isinstance(image_url_list, list):
-        print(f'error image_url_list is not a list - {image_url_list_filepath}')
+    if not isinstance(image_url_info_dict, dict):
+        print(f'error image_url_info_dict is not a dict - {image_url_info_dict_filepath}')
         return
 
-    for index in range(len(image_url_list)):
-        image_url = image_url_list[index]
-        if not isinstance(image_url, str):
-            print(f'error image_url is not a string - {index}')
+    for key, value in image_url_info_dict.items():
+        if type(key) is not str:
+            print(f'{FG_RED}image_url_info_dict: key is not a str - ({key}, {value}){RESET_COLOR}')
             return
 
-    IMAGE_URL_LIST = image_url_list
+        if type(value) is not str:
+            print(f'{FG_RED}image_url_info_dict: value is not a str - ({key}, {value}){RESET_COLOR}')
+            return
+
+    IMAGE_URL_INFO_DICT = image_url_info_dict
 ########################################################################
     port = args.port
     print(f'http://localhost:{port}')

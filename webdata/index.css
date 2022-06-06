@@ -9,4 +9,7 @@
 .game-node {
     border-width: 1px;
     border-color: #00ff00;
+    border-style: solid;
+    padding: 5px;
+    margin: 5px;
 }
