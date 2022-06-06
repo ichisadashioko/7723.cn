@@ -359,17 +359,63 @@ def get_mime_type_by_filename(
 ### FETCH GAME LIST DATA API ###########################################
 
 
+def parse_index_value(value_list: list):
+    if len(value_list) == 0:
+        raise Exception('empty value list')
+
+    value_bs = value_list[0]
+    if len(value_bs) == 0:
+        raise Exception('empty value')
+
+    try:
+        value = int(value_bs)
+        if value < 0:
+            raise Exception('negative value')
+
+        if value > len(GAME_OBJ_LIST):
+            raise Exception('index is out of range')
+        return value
+    except ValueError:
+        raise Exception('invalid value')
+
+
 def handle_game_list_request(
     request_handler: tornado.web.RequestHandler,
 ):
+    # implement pagination
+    params = request_handler.request.query_arguments
+    print('handle_game_list_request: params', params)
+
+    start_index = 0
+    if 'index' in params:
+        try:
+            start_index = parse_index_value(params['index'])
+        except Exception as ex:
+            # invalid index
+            stack_trace = traceback.format_exc()
+            print(FG_RED, 'EXCEPTION:', ex)
+            print(stack_trace, RESET_COLOR)
+
+            request_handler.set_status(404)
+            request_handler.set_header('Content-Type', 'application/json')
+            response_obj = {
+                'message': 'invalid index',
+                'exception': str(ex),
+                'stacktrace': stack_trace,
+            }
+
+            response_str = json.dumps(response_obj)
+            request_handler.write(response_str)
+            return
+
+    end_index = start_index + 16
+    end_index = min(end_index, len(GAME_OBJ_LIST))
+
     response_obj = []
 
-    # TODO implement pagination
-    total_number_of_games = len(GAME_OBJ_LIST)
-    number_of_returned_games = min(16, total_number_of_games)
-    for index in tqdm.tqdm(range(number_of_returned_games)):
-        game_info = GAME_OBJ_LIST[index]
-        response_obj.append(game_info)
+    for i in range(start_index, end_index):
+        game_obj = GAME_OBJ_LIST[i]
+        response_obj.append(game_obj)
 
     # print(response_obj)
     response_obj = make_obj_json_friendly(response_obj)
