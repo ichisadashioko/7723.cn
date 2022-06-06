@@ -26,6 +26,11 @@ import tornado.web
 
 import tqdm
 
+import cacherequests
+
+FG_RED = '\033[91m'
+RESET_COLOR = '\033[0m'
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 WEBDATA_DIRECTORY = os.path.join(ROOT, 'webdata')
 
@@ -382,37 +387,111 @@ def handle_game_list_request(
 ########################################################################
 
 ### HANDLE IMAGE REQUEST ###############################################
+
+
+def detect_image_type_from_content(
+    content_bs: bytes,
+):
+    # only detect png, jpg, and gif for now
+    # TODO detect other image types
+    # JPG
+    if len(content_bs) > 2:
+        if content_bs[0:2] == b'\xff\xd8':
+            return 'jpg'
+
+    # GIF
+    if len(content_bs) > 3:
+        if content_bs[0:3] == b'GIF':
+            return 'gif'
+
+    # PNG
+    if len(content_bs) > 8:
+        if content_bs[0:8] == b'\x89PNG\r\n\x1a\n':
+            return 'png'
+
+
 def handle_image_request(
+    quoted_image_url: str,
     request_handler: tornado.web.RequestHandler,
 ):
-    # TODO
-    pass
+    image_url = urllib.parse.unquote(quoted_image_url)
+    if image_url not in IMAGE_URL_LIST:
+        # not found
+        request_handler.set_status(404)
+        request_handler.set_header('Content-Type', 'application/json')
+        response_obj = {
+            'message': 'this image url is not cached before',
+            'path': image_url,
+        }
+
+        response_str = json.dumps(response_obj)
+        request_handler.write(response_str)
+
+        return
+
+    # find image in cache
+    response_dict = cacherequests.get_response_from_cache(image_url)
+    if response_dict is None:
+        request_handler.set_status(404)
+        request_handler.set_header('Content-Type', 'application/json')
+        response_obj = {
+            'message': 'image not found in cache',
+            'path': image_url,
+        }
+
+        response_str = json.dumps(response_obj)
+        request_handler.write(response_str)
+
+        return
+
+    image_content_bs = response_dict['content_bs']
+    # detect image type
+    ext = os.path.splitext(image_url)[1]
+    ext = ext.lower()
+
+    if ext in MIME_TYPE_DICT:
+        mime_type = MIME_TYPE_DICT[ext]
+    else:
+        image_type_str = detect_image_type_from_content(image_content_bs)
+        if image_type_str is None:
+            mime_type = 'application/octet-stream'
+        else:
+            mime_type = f'image/{image_type_str}'
+
+    request_handler.set_status(200)
+    request_handler.set_header('Content-Type', mime_type)
+    request_handler.set_header('Content-Length', str(len(image_content_bs)))
+    request_handler.write(image_content_bs)
+    return
 ########################################################################
+
+
+IMAGE_REQUEST_ROUTE_PREFIX = '/api/images/'
+
 
 class AllRequestHandler(tornado.web.RequestHandler):
     async def get(self):
+        # routing
         try:
-            handle_webdata_request(
-                request_handler=self,
-            )
+            request_path = self.request.path
+            if request_path.startswith(IMAGE_REQUEST_ROUTE_PREFIX):
+                quoted_image_url = request_path[len(IMAGE_REQUEST_ROUTE_PREFIX):]
+                handle_image_request(
+                    quoted_image_url=quoted_image_url,
+                    request_handler=self,
+                )
 
-            return
+                return
+            else:
+                handle_webdata_request(request_handler=self)
+                return
         except Exception as ex:
             stack_trace_str = traceback.format_exc()
-            print(ex)
+            print(FG_RED)
+            print(time.time_ns(), 'EXCEPTION', ex)
             print(stack_trace_str)
-            response_obj = {
-                'message': ex,
-                'exception': ex,
-                'stack_trace': stack_trace_str,
-                'request_handler': self,
-            }
-
-            response_obj = make_obj_json_friendly(response_obj)
-            response_str = json.dumps(response_obj)
-            self.set_status(500)
-            self.set_header('Content-Type', 'application/json')
-            self.write(response_str)
+            print(self.__dict__)
+            print(RESET_COLOR)
             return
 
         # get the request path

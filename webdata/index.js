@@ -12,7 +12,9 @@ function render_game_html_node(gameObj) {
     htmlGameNode.appendChild(el);
     if (gameObj.banner_image != null) {
         var img = document.createElement('img');
-        var actualImageUrl = `/api/images/${gameObj.banner_image.url_hash}`;
+        var originalImageUrl = gameObj.banner_image.url;
+        var quotedImageUrl = encodeURIComponent(originalImageUrl);
+        var actualImageUrl = `/api/images/${quotedImageUrl}`;
         img.src = actualImageUrl;
         img.className = 'game-node-image';
         el.appendChild(img);
