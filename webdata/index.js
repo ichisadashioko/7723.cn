@@ -3,9 +3,66 @@ let GLOBAL_LOADED_GAME_COUNT = 0;
 let GLOBAL_LOADING_DATA_XHR = null;
 let GLOBAL_GAME_OBJ_LIST = [];
 
+let dialog = document.getElementById('dialog');
+let dialogTitle = document.getElementById('dialog-title');
+let dialogBanner = document.getElementById('dialog-banner');
+let dialogGameplayContainer = document.getElementById('dialog-gameplay-container');
+let dialogBinaryContainer = document.getElementById('dialog-binary-container');
+let dialogCloseButton = document.getElementById('dialog-close');
+
+function close_dialog() {
+    dialog.setAttribute('hidden', 'true');
+    dialog.removeAttribute('tabindex');
+}
+
+dialogCloseButton.addEventListener('click', function (event) {
+    close_dialog();
+});
+
+dialog.addEventListener('keydown', function (event) {
+    console.debug(event);
+    // esc key
+    if (event.key === 'Escape' || event.key === 'Esc') {
+        dialog.setAttribute('hidden', 'true');
+        dialog.removeAttribute('tabindex');
+    }
+})
+
+function populate_popup_dialog(gameObj) {
+    dialogTitle.textContent = gameObj.name;
+
+    let dialogImage = document.createElement('img');
+
+    dialogBanner.innerHTML = '';
+    if (gameObj.banner_image != null) {
+        let originalImageUrl = gameObj.banner_image.url;
+        let quotedImageUrl = encodeURIComponent(originalImageUrl);
+        let actualImageUrl = `/api/images/${quotedImageUrl}`;
+        dialogImage.src = actualImageUrl;
+        dialogBanner.appendChild(dialogImage);
+    }
+
+    dialogGameplayContainer.innerHTML = '';
+    if (gameObj.gameplay_image_list != null) {
+        for (let i = 0; i < gameObj.gameplay_image_list.length; i++) {
+            let gameplayImage = document.createElement('img');
+            let originalImageUrl = gameObj.gameplay_image_list[i].url;
+            let quotedImageUrl = encodeURIComponent(originalImageUrl);
+            let actualImageUrl = `/api/images/${quotedImageUrl}`;
+            gameplayImage.src = actualImageUrl;
+            dialogGameplayContainer.appendChild(gameplayImage);
+        }
+    }
+
+    dialog.removeAttribute('hidden');
+    dialog.setAttribute('tabindex', '0');
+    dialog.focus();
+}
+
 function render_game_html_node(gameObj) {
     let anchor = document.createElement('a');
-    anchor.href = `/gameinfo/${gameObj.index}`;
+    // TODO
+    // anchor.href = `/gameinfo/${gameObj.index}`;
 
     let htmlGameNode = document.createElement('div');
     htmlGameNode.className = 'game-node';
@@ -32,6 +89,12 @@ function render_game_html_node(gameObj) {
     }
 
     // return htmlGameNode;
+
+    anchor.addEventListener('click', function (event) {
+        event.preventDefault();
+        populate_popup_dialog(gameObj);
+    });
+
     return anchor;
 }
 

@@ -354,8 +354,8 @@ def get_mime_type_by_filename(
         return MIME_TYPE_DICT[extension]
     else:
         return 'application/octet-stream'
-########################################################################
 
+########################################################################
 ### FETCH GAME LIST DATA API ###########################################
 
 

@@ -33,3 +33,29 @@
     align-items: center;
     align-content: center; */
 }
+
+#dialog {
+    /* position: absolute; */
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.75);
+    overflow-y: scroll;
+}
+
+#dialog>* {
+    background-color: unset;
+    border-width: 1px;
+    border-color: #00ff00;
+    border-style: solid;
+    padding: 5px;
+    margin: 5px;
+}
+
+#dialog-gameplay-container>img {
+    border-width: 1px;
+    border-color: #00ff00;
+    border-style: solid;
+}
