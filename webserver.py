@@ -379,6 +379,24 @@ def parse_index_value(value_list: list):
         raise Exception('invalid value')
 
 
+def parse_count_value(value_list: list):
+    if len(value_list) == 0:
+        raise Exception('empty value list')
+
+    value_bs = value_list[0]
+    if len(value_bs) == 0:
+        raise Exception('empty value')
+
+    try:
+        value = int(value_bs)
+        if value < 1:
+            raise Exception('invalid value')
+
+        return value
+    except ValueError:
+        raise Exception('invalid value')
+
+
 def handle_game_list_request(
     request_handler: tornado.web.RequestHandler,
 ):
@@ -387,6 +405,7 @@ def handle_game_list_request(
     print('handle_game_list_request: params', params)
 
     start_index = 0
+    count = 16
     if 'index' in params:
         try:
             start_index = parse_index_value(params['index'])
@@ -408,14 +427,37 @@ def handle_game_list_request(
             request_handler.write(response_str)
             return
 
-    end_index = start_index + 16
+    if 'count' in params:
+        try:
+            count = parse_count_value(params['count'])
+        except Exception as ex:
+            # invalid count
+            stack_trace = traceback.format_exc()
+            print(FG_RED, 'EXCEPTION:', ex)
+            print(stack_trace, RESET_COLOR)
+
+            request_handler.set_status(400)
+            request_handler.set_header('Content-Type', 'application/json')
+            response_obj = {
+                'message': 'invalid count',
+                'exception': str(ex),
+                'stacktrace': stack_trace,
+            }
+
+            response_str = json.dumps(response_obj)
+            request_handler.write(response_str)
+            return
+
+    end_index = start_index + count
     end_index = min(end_index, len(GAME_OBJ_LIST))
 
     response_obj = []
 
     for i in range(start_index, end_index):
-        game_obj = GAME_OBJ_LIST[i]
-        response_obj.append(game_obj)
+        game_info_dict = GAME_OBJ_LIST[i]
+        game_info_dict = game_info_dict.copy()
+        game_info_dict['index'] = i
+        response_obj.append(game_info_dict)
 
     # print(response_obj)
     response_obj = make_obj_json_friendly(response_obj)
