@@ -38,21 +38,38 @@ function populate_popup_dialog(gameObj) {
         let originalImageUrl = gameObj.banner_image.url;
         let quotedImageUrl = encodeURIComponent(originalImageUrl);
         let actualImageUrl = `/api/images/${quotedImageUrl}`;
-        dialogImage.src = actualImageUrl;
+
+        if (gameObj.banner_image.in_cache) {
+            dialogImage.src = actualImageUrl;
+        } else {
+            dialogImage.setAttribute('data-src', actualImageUrl);
+        }
+
         dialogBanner.appendChild(dialogImage);
     }
 
     dialogGameplayContainer.innerHTML = '';
     if (gameObj.gameplay_image_list != null) {
         for (let i = 0; i < gameObj.gameplay_image_list.length; i++) {
+            let imageInfo = gameObj.gameplay_image_list[i];
+
             let gameplayImage = document.createElement('img');
-            let originalImageUrl = gameObj.gameplay_image_list[i].url;
+            let originalImageUrl = imageInfo.url;
             let quotedImageUrl = encodeURIComponent(originalImageUrl);
             let actualImageUrl = `/api/images/${quotedImageUrl}`;
-            gameplayImage.src = actualImageUrl;
+
+            if (imageInfo.in_cache) {
+                gameplayImage.src = actualImageUrl;
+            } else {
+                gameplayImage.setAttribute('data-src', actualImageUrl);
+            }
+
             dialogGameplayContainer.appendChild(gameplayImage);
         }
     }
+
+    dialogBinaryContainer.innerHTML = '';
+    // TODO render binary download links
 
     dialog.removeAttribute('hidden');
     dialog.setAttribute('tabindex', '0');
@@ -61,6 +78,7 @@ function populate_popup_dialog(gameObj) {
 
 function render_game_html_node(gameObj) {
     let anchor = document.createElement('a');
+    anchor.className = 'game-node-anchor';
     // TODO
     // anchor.href = `/gameinfo/${gameObj.index}`;
 
@@ -83,7 +101,11 @@ function render_game_html_node(gameObj) {
         let originalImageUrl = gameObj.banner_image.url;
         let quotedImageUrl = encodeURIComponent(originalImageUrl);
         let actualImageUrl = `/api/images/${quotedImageUrl}`;
-        img.src = actualImageUrl;
+        if (gameObj.banner_image.in_cache) {
+            img.src = actualImageUrl;
+        } else {
+            img.setAttribute('data-src', actualImageUrl);
+        }
         img.className = 'game-node-image';
         el.appendChild(img);
     }

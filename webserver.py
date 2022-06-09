@@ -19,6 +19,7 @@ import traceback
 
 import urllib
 import urllib.parse
+import wsgiref.handlers
 
 import tornado
 import tornado.ioloop
@@ -34,7 +35,7 @@ RESET_COLOR = '\033[0m'
 ROOT = os.path.dirname(os.path.abspath(__file__))
 WEBDATA_DIRECTORY = os.path.join(ROOT, 'webdata')
 
-GAME_OBJ_LIST = []
+GAME_INFO_LIST = []
 GAME_BINARY_URL_LIST = []
 IMAGE_URL_INFO_DICT = []
 
@@ -372,7 +373,7 @@ def parse_index_value(value_list: list):
         if value < 0:
             raise Exception('negative value')
 
-        if value > len(GAME_OBJ_LIST):
+        if value > len(GAME_INFO_LIST):
             raise Exception('index is out of range')
         return value
     except ValueError:
@@ -449,12 +450,12 @@ def handle_game_list_request(
             return
 
     end_index = start_index + count
-    end_index = min(end_index, len(GAME_OBJ_LIST))
+    end_index = min(end_index, len(GAME_INFO_LIST))
 
     response_obj = []
 
     for i in range(start_index, end_index):
-        game_info_dict = GAME_OBJ_LIST[i]
+        game_info_dict = GAME_INFO_LIST[i]
         game_info_dict = game_info_dict.copy()
         game_info_dict['index'] = i
         response_obj.append(game_info_dict)
@@ -473,7 +474,6 @@ def handle_game_list_request(
     return
 
 ########################################################################
-
 ### HANDLE IMAGE REQUEST ###############################################
 
 
@@ -498,10 +498,20 @@ def detect_image_type_from_content(
             return 'png'
 
 
+DEFAULT_LAST_MODIFIED_VALUE = wsgiref.handlers.format_date_time(0)
+
+
 def handle_image_request(
     quoted_image_url: str,
     request_handler: tornado.web.RequestHandler,
 ):
+    # if the request header contains 'Last-Modified', 'If-Modified-Since' and 'If-Unmodified-Since' return 304 Not Modified
+
+    for key in request_handler.request.headers:
+        if key.lower() in ['if-modified-since', 'if-unmodified-since']:
+            request_handler.set_status(304)
+            return
+
     image_url = urllib.parse.unquote(quoted_image_url)
     if image_url not in IMAGE_URL_INFO_DICT.keys():
         # not found
@@ -545,7 +555,10 @@ def handle_image_request(
         else:
             mime_type = f'image/{image_type_str}'
 
+    # I didn't store the response header, so we don't have the actual value
+
     request_handler.set_status(200)
+    request_handler.set_header('Last-Modified', DEFAULT_LAST_MODIFIED_VALUE)
     request_handler.set_header('Content-Type', mime_type)
     request_handler.set_header('Content-Length', str(len(image_content_bs)))
     request_handler.write(image_content_bs)
@@ -630,7 +643,7 @@ class AllRequestHandler(tornado.web.RequestHandler):
 
 
 def main():
-    global GAME_OBJ_LIST, GAME_BINARY_URL_LIST, IMAGE_URL_INFO_DICT
+    global GAME_INFO_LIST, GAME_BINARY_URL_LIST, IMAGE_URL_INFO_DICT
 
     parser = argparse.ArgumentParser()
     parser.add_argument('port', nargs='?', type=int, default=8888)
@@ -648,7 +661,7 @@ def main():
     # sample json content
 
     # {
-    #     "game_obj_list_filepath": "modified_game_obj_list-1653552476412252800.pickle",
+    #     "game_info_list_filepath": "modified_game_obj_list-1653552476412252800.pickle",
     #     "game_binary_url_list_filepath": "tmp_pickle_files/game_binary_url_list-1650280741999342000.pickle",
     #     "image_url_info_dict_filepath": "image_url_info_dict-1654534265407578600.pickle"
     # }
@@ -666,28 +679,28 @@ def main():
         return
 
     # validate config obj
-    if 'game_obj_list_filepath' not in config_obj:
-        print(f'error game_obj_list_filepath not in config_obj - {json_config_file}')
+    if 'game_info_list_filepath' not in config_obj:
+        print(f'error game_info_list_filepath not in config_obj - {json_config_file}')
         return
 
-    game_obj_list_filepath = config_obj['game_obj_list_filepath']
-    if not os.path.exists(game_obj_list_filepath):
-        print(f'error game_obj_list_filepath not found - {game_obj_list_filepath}')
+    game_info_list_filepath = config_obj['game_info_list_filepath']
+    if not os.path.exists(game_info_list_filepath):
+        print(f'error game_info_list_filepath not found - {game_info_list_filepath}')
         return
 
     # load pickle content
     try:
-        with open(game_obj_list_filepath, 'rb') as infile:
+        with open(game_info_list_filepath, 'rb') as infile:
             game_obj_list = pickle.load(infile)
     except Exception as ex:
         stack_trace_str = traceback.format_exc()
-        print(f'error loading pickle file - {game_obj_list_filepath}')
+        print(f'error loading pickle file - {game_info_list_filepath}')
         print(ex)
         print(stack_trace_str)
         return
 
     if not isinstance(game_obj_list, list):
-        print(f'error game_obj_list is not a list - {game_obj_list_filepath}')
+        print(f'error game_obj_list is not a list - {game_info_list_filepath}')
         return
 
     for index in range(len(game_obj_list)):
@@ -696,7 +709,7 @@ def main():
             print(f'error game_obj is not a dict - {index}')
             return
     # TODO validate each entry in game_obj_list
-    GAME_OBJ_LIST = game_obj_list
+    GAME_INFO_LIST = game_obj_list
 
 ########################################################################
     if 'game_binary_url_list_filepath' not in config_obj:
