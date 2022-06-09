@@ -568,6 +568,73 @@ def handle_image_request(
 
 IMAGE_REQUEST_ROUTE_PREFIX = '/api/images/'
 
+SORT_REQUEST_ROUTE_PREFIX = '/api/sort/'
+
+
+def handle_sort_request(
+    field_name: str,
+    request_handler: tornado.web.RequestHandler,
+):
+    pbar = tqdm.tqdm(GAME_INFO_LIST)
+    pbar.set_description(f'checking {field_name}')
+    is_invalid_field = False
+    for game_info_dict in pbar:
+        if field_name not in game_info_dict:
+            is_invalid_field = True
+            break
+
+    if is_invalid_field:
+        request_handler.set_status(400)
+        request_handler.set_header('Content-Type', 'application/json')
+        response_obj = {
+            'message': 'invalid field name',
+            'field_name': field_name,
+        }
+
+        response_str = json.dumps(response_obj)
+        request_handler.write(response_str)
+        return
+
+    if len(GAME_INFO_LIST) == 0:
+        request_handler.set_status(400)
+        request_handler.set_header('Content-Type', 'application/json')
+        response_obj = {
+            'message': 'empty game list',
+        }
+
+        response_str = json.dumps(response_obj)
+        request_handler.write(response_str)
+        return
+
+    if type(GAME_INFO_LIST[0][field_name]) not in [int, float, str, bytes, bool]:
+        request_handler.set_status(400)
+        request_handler.set_header('Content-Type', 'application/json')
+        response_obj = {
+            'message': 'invalid field type',
+            'field_name': field_name,
+        }
+
+        response_str = json.dumps(response_obj)
+        request_handler.write(response_str)
+        return
+
+    # sort
+    start_time_ns = time.perf_counter_ns()
+    GAME_INFO_LIST.sort(key=lambda x: x[field_name])
+    end_time_ns = time.perf_counter_ns()
+    taken_time_ns = end_time_ns - start_time_ns
+
+    response_obj = {
+        'message': 'sorted',
+        'field_name': field_name,
+        'taken_time_ns': taken_time_ns,
+    }
+
+    response_str = json.dumps(response_obj)
+    request_handler.set_status(200)
+    request_handler.set_header('Content-Type', 'application/json')
+    request_handler.write(response_str)
+
 
 class AllRequestHandler(tornado.web.RequestHandler):
     async def get(self):
@@ -580,11 +647,14 @@ class AllRequestHandler(tornado.web.RequestHandler):
                     quoted_image_url=quoted_image_url,
                     request_handler=self,
                 )
-
-                return
+            elif request_path.startswith(SORT_REQUEST_ROUTE_PREFIX):
+                field_name = request_path[len(SORT_REQUEST_ROUTE_PREFIX):]
+                handle_sort_request(
+                    field_name=field_name,
+                    request_handler=self,
+                )
             else:
                 handle_webdata_request(request_handler=self)
-                return
         except Exception as ex:
             stack_trace_str = traceback.format_exc()
             print(FG_RED)
@@ -592,7 +662,8 @@ class AllRequestHandler(tornado.web.RequestHandler):
             print(stack_trace_str)
             print(self.__dict__)
             print(RESET_COLOR)
-            return
+
+        return
 
         # get the request path
         request_url = self.request.path
@@ -661,8 +732,8 @@ def main():
     # sample json content
 
     # {
-    #     "game_info_list_filepath": "modified_game_obj_list-1653552476412252800.pickle",
-    #     "game_binary_url_list_filepath": "tmp_pickle_files/game_binary_url_list-1650280741999342000.pickle",
+    #     "game_info_list_filepath": "game_info_list-1653552476412252800.pickle",
+    #     "game_binary_url_list_filepath": "game_binary_url_list-1650280741999342000.pickle",
     #     "image_url_info_dict_filepath": "image_url_info_dict-1654534265407578600.pickle"
     # }
 
@@ -691,7 +762,7 @@ def main():
     # load pickle content
     try:
         with open(game_info_list_filepath, 'rb') as infile:
-            game_obj_list = pickle.load(infile)
+            _game_info_list = pickle.load(infile)
     except Exception as ex:
         stack_trace_str = traceback.format_exc()
         print(f'error loading pickle file - {game_info_list_filepath}')
@@ -699,17 +770,17 @@ def main():
         print(stack_trace_str)
         return
 
-    if not isinstance(game_obj_list, list):
-        print(f'error game_obj_list is not a list - {game_info_list_filepath}')
+    if not isinstance(_game_info_list, list):
+        print(f'error _game_info_list is not a list - {game_info_list_filepath}')
         return
 
-    for index in range(len(game_obj_list)):
-        game_obj = game_obj_list[index]
+    for index in range(len(_game_info_list)):
+        game_obj = _game_info_list[index]
         if not isinstance(game_obj, dict):
             print(f'error game_obj is not a dict - {index}')
             return
-    # TODO validate each entry in game_obj_list
-    GAME_INFO_LIST = game_obj_list
+    # TODO validate each entry in _game_info_list
+    GAME_INFO_LIST = _game_info_list
 
 ########################################################################
     if 'game_binary_url_list_filepath' not in config_obj:
