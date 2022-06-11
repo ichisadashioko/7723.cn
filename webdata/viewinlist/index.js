@@ -117,16 +117,31 @@ function render_game_html_node(gameObj) {
     el = document.createElement('div');
     el.className = 'game-node-image-container';
     htmlGameNode.appendChild(el);
+
+    let originalImageUrlList = {};
+
     if (gameObj.banner_image != null) {
+        originalImageUrlList[gameObj.banner_image.url] = gameObj.banner_image;
+    }
+
+    if (gameObj.gameplay_image_list != null) {
+        for (let i = 0; i < gameObj.gameplay_image_list.length; i++) {
+            let imageInfo = gameObj.gameplay_image_list[i];
+            originalImageUrlList[imageInfo.url] = imageInfo;
+        }
+    }
+
+    for (let originalImageUrl in originalImageUrlList) {
+        let imageInfo = originalImageUrlList[originalImageUrl];
         let img = document.createElement('img');
-        let originalImageUrl = gameObj.banner_image.url;
         let quotedImageUrl = encodeURIComponent(originalImageUrl);
         let actualImageUrl = `/api/images/${quotedImageUrl}`;
-        if (gameObj.banner_image.in_cache) {
+        if (imageInfo.in_cache) {
             img.src = actualImageUrl;
         } else {
             img.setAttribute('data-src', actualImageUrl);
         }
+
         img.className = 'game-node-image';
         el.appendChild(img);
     }

@@ -36,8 +36,8 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 WEBDATA_DIRECTORY = os.path.join(ROOT, 'webdata')
 
 GAME_INFO_LIST = []
-GAME_BINARY_URL_LIST = []
-IMAGE_URL_INFO_DICT = []
+GAME_BINARY_URL_INFO_DICT = {}
+IMAGE_URL_INFO_DICT = {}
 
 
 def make_obj_json_friendly(obj):
@@ -567,8 +567,71 @@ def handle_image_request(
 
 
 IMAGE_REQUEST_ROUTE_PREFIX = '/api/images/'
-
 SORT_REQUEST_ROUTE_PREFIX = '/api/sort/'
+GAME_BINARY_ROUTE_PREFIX = '/api/binaries/'
+
+
+def handle_game_binaries_request(
+    quoted_url: str,
+    request_handler: tornado.web.RequestHandler,
+):
+    # if the request header contains 'Last-Modified', 'If-Modified-Since' and 'If-Unmodified-Since' return 304 Not Modified
+
+    for key in request_handler.request.headers:
+        if key.lower() in ['if-modified-since', 'if-unmodified-since']:
+            request_handler.set_status(304)
+            return
+
+    url = urllib.parse.unquote(quoted_url)
+    if url not in GAME_BINARY_URL_INFO_DICT.keys():
+        # not found
+        request_handler.set_status(404)
+        request_handler.set_header('Content-Type', 'application/json')
+        response_obj = {
+            'message': 'this url is not in cache',
+            'url': url,
+        }
+
+        response_str = json.dumps(response_obj)
+        request_handler.write(response_str)
+
+        return True
+
+    body_content_cache_key = GAME_BINARY_URL_INFO_DICT[url]
+
+    content_bs = cacherequests.get_body_content(body_content_cache_key)
+    if content_bs is None:
+        request_handler.set_status(404)
+        request_handler.set_header('Content-Type', 'application/json')
+        response_obj = {
+            'message': 'content is no longer in cache',
+            'url': url,
+        }
+
+        response_str = json.dumps(response_obj)
+        request_handler.write(response_str)
+        return True
+
+    if len(content_bs) == 0:
+        request_handler.set_status(404)
+        request_handler.set_header('Content-Type', 'application/json')
+        response_obj = {
+            'message': 'content is empty',
+            'url': url,
+        }
+
+        response_str = json.dumps(response_obj)
+        request_handler.write(response_str)
+        return True
+
+    # I didn't store the response header, so we don't have the actual value
+
+    request_handler.set_status(200)
+    request_handler.set_header('Last-Modified', DEFAULT_LAST_MODIFIED_VALUE)
+    request_handler.set_header('Content-Type', 'application/octet-stream')
+    request_handler.set_header('Content-Length', str(len(content_bs)))
+    request_handler.write(content_bs)
+    return True
 
 
 def handle_sort_request(
@@ -653,6 +716,12 @@ class AllRequestHandler(tornado.web.RequestHandler):
                     field_name=field_name,
                     request_handler=self,
                 )
+            elif request_path.startswith(GAME_BINARY_ROUTE_PREFIX):
+                quoted_url = request_path[len(GAME_BINARY_ROUTE_PREFIX):]
+                handle_game_binaries_request(
+                    quoted_url=quoted_url,
+                    request_handler=self,
+                )
             else:
                 handle_webdata_request(request_handler=self)
         except Exception as ex:
@@ -714,7 +783,7 @@ class AllRequestHandler(tornado.web.RequestHandler):
 
 
 def main():
-    global GAME_INFO_LIST, GAME_BINARY_URL_LIST, IMAGE_URL_INFO_DICT
+    global GAME_INFO_LIST, GAME_BINARY_URL_INFO_DICT, IMAGE_URL_INFO_DICT
 
     parser = argparse.ArgumentParser()
     parser.add_argument('port', nargs='?', type=int, default=8888)
@@ -732,9 +801,9 @@ def main():
     # sample json content
 
     # {
-    #     "game_info_list_filepath": "game_info_list-1653552476412252800.pickle",
-    #     "game_binary_url_list_filepath": "game_binary_url_list-1650280741999342000.pickle",
-    #     "image_url_info_dict_filepath": "image_url_info_dict-1654534265407578600.pickle"
+    #     "game_info_list_filepath": "game_info_list.pickle",
+    #     "game_binary_url_info_dict_filepath": "game_binary_url_info_dict.pickle",
+    #     "image_url_info_dict_filepath": "image_url_info_dict.pickle"
     # }
 
     content_bs = open(json_config_file, 'rb').read()
@@ -783,37 +852,40 @@ def main():
     GAME_INFO_LIST = _game_info_list
 
 ########################################################################
-    if 'game_binary_url_list_filepath' not in config_obj:
-        print(f'error game_binary_url_list_filepath not in config_obj - {json_config_file}')
+    if 'game_binary_url_info_dict_filepath' not in config_obj:
+        print(f'error game_binary_url_info_dict_filepath not in config_obj - {json_config_file}')
         return
 
-    game_binary_url_list_filepath = config_obj['game_binary_url_list_filepath']
-    if not os.path.exists(game_binary_url_list_filepath):
-        print(f'error game_binary_url_list_filepath not found - {game_binary_url_list_filepath}')
+    game_binary_url_info_dict_filepath = config_obj['game_binary_url_info_dict_filepath']
+    if not os.path.exists(game_binary_url_info_dict_filepath):
+        print(f'error game_binary_url_info_dict_filepath not found - {game_binary_url_info_dict_filepath}')
         return
 
     # load pickle content
     try:
-        with open(game_binary_url_list_filepath, 'rb') as infile:
-            game_binary_url_list = pickle.load(infile)
+        with open(game_binary_url_info_dict_filepath, 'rb') as infile:
+            game_binary_url_info_dict = pickle.load(infile)
     except Exception as ex:
         stack_trace_str = traceback.format_exc()
-        print(f'error loading pickle file - {game_binary_url_list_filepath}')
+        print(f'error loading pickle file - {game_binary_url_info_dict_filepath}')
         print(ex)
         print(stack_trace_str)
         return
 
-    if not isinstance(game_binary_url_list, list):
-        print(f'error game_binary_url_list is not a list - {game_binary_url_list_filepath}')
+    if not isinstance(game_binary_url_info_dict, dict):
+        print(f'error game_binary_url_info_dict is not a dict - {game_binary_url_info_dict_filepath}')
         return
 
-    for index in range(len(game_binary_url_list)):
-        game_binary_url = game_binary_url_list[index]
-        if not isinstance(game_binary_url, str):
-            print(f'error game_binary_url is not a str - {game_binary_url}')
+    for key, value in game_binary_url_info_dict.items():
+        if type(key) is not str:
+            print(f'{FG_RED}game_binary_url_info_dict: key is not a str - ({key}, {value}){RESET_COLOR}')
             return
 
-    GAME_BINARY_URL_LIST = game_binary_url_list
+        if type(value) is not str:
+            print(f'{FG_RED}game_binary_url_info_dict: value is not a str - ({key}, {value}){RESET_COLOR}')
+            return
+
+    GAME_BINARY_URL_INFO_DICT = game_binary_url_info_dict
 ########################################################################
     if 'image_url_info_dict_filepath' not in config_obj:
         print(f'error image_url_info_dict_filepath not in config_obj - {json_config_file}')
